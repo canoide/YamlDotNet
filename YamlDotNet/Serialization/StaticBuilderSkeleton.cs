@@ -1,4 +1,4 @@
-﻿// This file is part of YamlDotNet - A .NET library for YAML.
+// This file is part of YamlDotNet - A .NET library for YAML.
 // Copyright (c) Antoine Aubry and contributors
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy of
@@ -40,6 +40,7 @@ namespace YamlDotNet.Serialization
         internal readonly LazyComponentRegistrationList<Nothing, IYamlTypeConverter> typeConverterFactories;
         internal readonly LazyComponentRegistrationList<ITypeInspector, ITypeInspector> typeInspectorFactories;
         internal bool includeNonPublicProperties;
+        internal bool isDynamicTypeResolutionEnabled;
         internal Settings settings;
         internal YamlFormatter yamlFormatter = YamlFormatter.Default;
 
@@ -80,11 +81,22 @@ namespace YamlDotNet.Serialization
         }
 
         /// <summary>
+        /// Configures whether dynamic runtime type resolution is enabled for polymorphic objects, interfaces, and base types.
+        /// </summary>
+        public TBuilder WithDynamicTypeResolution(bool enable = true)
+        {
+            isDynamicTypeResolutionEnabled = enable;
+            typeResolver = enable ? new TypeResolvers.DynamicTypeResolver() : new TypeResolvers.StaticTypeResolver();
+            return Self;
+        }
+
+        /// <summary>
         /// Sets the <see cref="ITypeResolver" /> that will be used by the (de)serializer.
         /// </summary>
         public TBuilder WithTypeResolver(ITypeResolver typeResolver)
         {
             this.typeResolver = typeResolver ?? throw new ArgumentNullException(nameof(typeResolver));
+            this.isDynamicTypeResolutionEnabled = typeResolver is TypeResolvers.DynamicTypeResolver;
             return Self;
         }
 

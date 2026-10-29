@@ -1,4 +1,4 @@
-﻿// This file is part of YamlDotNet - A .NET library for YAML.
+// This file is part of YamlDotNet - A .NET library for YAML.
 // Copyright (c) Antoine Aubry and contributors
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy of
@@ -72,6 +72,7 @@ namespace YamlDotNet.Serialization.EventEmitters
         private readonly YamlFormatter formatter;
         private readonly INamingConvention enumNamingConvention;
         private readonly ITypeInspector typeInspector;
+        private readonly bool isDynamicTypeResolutionEnabled;
 
         public TypeAssigningEventEmitter(IEventEmitter nextEmitter,
             IDictionary<Type, TagName> tagMappings,
@@ -81,6 +82,19 @@ namespace YamlDotNet.Serialization.EventEmitters
             YamlFormatter formatter,
             INamingConvention enumNamingConvention,
             ITypeInspector typeInspector)
+            : this(nextEmitter, tagMappings, quoteNecessaryStrings, quoteYaml1_1Strings, defaultScalarStyle, formatter, enumNamingConvention, typeInspector, false)
+        {
+        }
+
+        public TypeAssigningEventEmitter(IEventEmitter nextEmitter,
+            IDictionary<Type, TagName> tagMappings,
+            bool quoteNecessaryStrings,
+            bool quoteYaml1_1Strings,
+            ScalarStyle defaultScalarStyle,
+            YamlFormatter formatter,
+            INamingConvention enumNamingConvention,
+            ITypeInspector typeInspector,
+            bool isDynamicTypeResolutionEnabled)
             : base(nextEmitter)
         {
             this.defaultScalarStyle = defaultScalarStyle;
@@ -98,6 +112,7 @@ namespace YamlDotNet.Serialization.EventEmitters
 #endif
             this.enumNamingConvention = enumNamingConvention;
             this.typeInspector = typeInspector;
+            this.isDynamicTypeResolutionEnabled = isDynamicTypeResolutionEnabled;
         }
 
         public override void Emit(ScalarEventInfo eventInfo, IEmitter emitter)
@@ -235,6 +250,14 @@ namespace YamlDotNet.Serialization.EventEmitters
             if (tagMappings.TryGetValue(eventInfo.Source.Type, out var tag))
             {
                 eventInfo.Tag = tag;
+            }
+            else if (isDynamicTypeResolutionEnabled &&
+                     eventInfo.Source.Type != eventInfo.Source.StaticType &&
+                     eventInfo.Source.Type != typeof(object) &&
+                     eventInfo.Source.Type != typeof(Dictionary<object, object>) &&
+                     eventInfo.Source.Type != typeof(List<object>))
+            {
+                eventInfo.Tag = $"!{eventInfo.Source.Type.AssemblyQualifiedName}";
             }
         }
 
