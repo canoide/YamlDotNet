@@ -1,4 +1,4 @@
-﻿// This file is part of YamlDotNet - A .NET library for YAML.
+// This file is part of YamlDotNet - A .NET library for YAML.
 // Copyright (c) Antoine Aubry and contributors
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy of
@@ -106,7 +106,9 @@ namespace YamlDotNet.Serialization
                             defaultScalarStyle,
                             yamlFormatter,
                             enumNamingConvention,
-                            BuildTypeInspector())
+                            BuildTypeInspector(),
+                            typeResolver,
+                            enableDynamicTypeResolution)
                 }
             };
 
@@ -321,7 +323,9 @@ namespace YamlDotNet.Serialization
                 ScalarStyle.Plain,
                 YamlFormatter.Default,
                 enumNamingConvention,
-                BuildTypeInspector()
+                BuildTypeInspector(),
+                typeResolver,
+                enableDynamicTypeResolution
                 ), loc => loc.InsteadOf<TypeAssigningEventEmitter>());
             return WithTypeInspector(inner => new ReadableAndWritablePropertiesTypeInspector(inner), loc => loc.OnBottom());
         }
