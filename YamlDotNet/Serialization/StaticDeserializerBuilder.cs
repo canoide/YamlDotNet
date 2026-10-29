@@ -1,4 +1,4 @@
-﻿// This file is part of YamlDotNet - A .NET library for YAML.
+// This file is part of YamlDotNet - A .NET library for YAML.
 // Copyright (c) Antoine Aubry and contributors
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy of
@@ -61,6 +61,7 @@ namespace YamlDotNet.Serialization
         private bool attemptUnknownTypeDeserialization;
         private bool enforceNullability;
         private bool caseInsensitivePropertyMatching;
+        private bool allowParameterizedConstructors;
         private int? maximumRecursion;
 
         /// <summary>
@@ -108,7 +109,8 @@ namespace YamlDotNet.Serialization
                     enforceNullability,
                     caseInsensitivePropertyMatching,
                     false, // the static builder doesn't support required attributes
-                    BuildTypeConverters())
+                    BuildTypeConverters(),
+                    allowParameterizedConstructors)
                 },
             };
 
@@ -212,6 +214,16 @@ namespace YamlDotNet.Serialization
         public StaticDeserializerBuilder WithCaseInsensitivePropertyMatching()
         {
             caseInsensitivePropertyMatching = true;
+            return this;
+        }
+
+        /// <summary>
+        /// Enables support for parameterized constructors and immutable object deserialization.
+        /// </summary>
+        /// <returns></returns>
+        public StaticDeserializerBuilder WithParameterizedConstructors()
+        {
+            allowParameterizedConstructors = true;
             return this;
         }
 

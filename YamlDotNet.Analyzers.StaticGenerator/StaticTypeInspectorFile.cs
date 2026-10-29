@@ -1,4 +1,4 @@
-﻿// This file is part of YamlDotNet - A .NET library for YAML.
+// This file is part of YamlDotNet - A .NET library for YAML.
 // Copyright (c) Antoine Aubry and contributors
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy of
@@ -39,7 +39,7 @@ namespace YamlDotNet.Analyzers.StaticGenerator
 
         public override void Write(SerializableSyntaxReceiver syntaxReceiver)
         {
-            Write("public class StaticTypeInspector : YamlDotNet.Serialization.ITypeInspector");
+            Write("public class StaticTypeInspector : YamlDotNet.Serialization.TypeInspectors.TypeInspectorSkeleton");
             Write("{"); Indent();
 
             Write("private readonly YamlDotNet.Serialization.ITypeResolver _typeResolver;");
@@ -49,7 +49,7 @@ namespace YamlDotNet.Analyzers.StaticGenerator
             UnIndent(); Write("}");
 
             #region GetProperties
-            Write("public IEnumerable<YamlDotNet.Serialization.IPropertyDescriptor> GetProperties(Type type, object container)");
+            Write("public override IEnumerable<YamlDotNet.Serialization.IPropertyDescriptor> GetProperties(Type type, object container)");
             Write("{"); Indent();
             foreach (var o in syntaxReceiver.Classes)
             {
@@ -75,7 +75,7 @@ namespace YamlDotNet.Analyzers.StaticGenerator
             #endregion
 
             #region GetProperty
-            Write("public YamlDotNet.Serialization.IPropertyDescriptor GetProperty(Type type, object container, string name, bool ignoreUnmatched, bool caseInsensitivePropertyMatching)");
+            Write("public new YamlDotNet.Serialization.IPropertyDescriptor GetProperty(Type type, object container, string name, bool ignoreUnmatched, bool caseInsensitivePropertyMatching)");
             Write("{"); Indent();
             foreach (var o in syntaxReceiver.Classes)
             {
@@ -116,7 +116,7 @@ namespace YamlDotNet.Analyzers.StaticGenerator
             UnIndent(); Write("}");
             #endregion
 
-            Write("public string GetEnumName(Type type, string name)");
+            Write("public override string GetEnumName(Type type, string name)");
             Write("{"); Indent();
             var prefix = string.Empty;
             foreach (var map in syntaxReceiver.EnumMappings)
@@ -136,7 +136,7 @@ namespace YamlDotNet.Analyzers.StaticGenerator
             UnIndent(); Write("}");
 
             prefix = string.Empty;
-            Write("public string GetEnumValue(object value)");
+            Write("public override string GetEnumValue(object value)");
             Write("{"); Indent();
             Write("var type = value.GetType();");
             foreach (var map in syntaxReceiver.EnumMappings)
@@ -155,7 +155,7 @@ namespace YamlDotNet.Analyzers.StaticGenerator
             Write("return value.ToString();");
             UnIndent(); Write("}");
 
-            Write("public bool HasParseMethod(Type type)");
+            Write("public override bool HasParseMethod(Type type)");
             Write("{"); Indent();
             foreach (var o in syntaxReceiver.Classes)
             {
@@ -171,7 +171,7 @@ namespace YamlDotNet.Analyzers.StaticGenerator
             Write("return false;");
             UnIndent(); Write("}");
 
-            Write("public object Parse(string value, Type expectedType)");
+            Write("public override object Parse(string value, Type expectedType)");
             Write("{"); Indent();
             foreach (var o in syntaxReceiver.Classes)
             {

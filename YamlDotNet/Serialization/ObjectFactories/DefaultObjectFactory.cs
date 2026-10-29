@@ -1,4 +1,4 @@
-﻿// This file is part of YamlDotNet - A .NET library for YAML.
+// This file is part of YamlDotNet - A .NET library for YAML.
 // Copyright (c) Antoine Aubry and contributors
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy of
@@ -25,6 +25,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using YamlDotNet.Helpers;
 using YamlDotNet.Serialization.Callbacks;
 
 namespace YamlDotNet.Serialization.ObjectFactories
@@ -85,7 +86,7 @@ namespace YamlDotNet.Serialization.ObjectFactories
             this.settings = settings;
         }
 
-        public override object Create(Type type)
+        private Type GetImplementationType(Type type)
         {
             if (type.IsInterface())
             {
@@ -93,21 +94,58 @@ namespace YamlDotNet.Serialization.ObjectFactories
                 {
                     if (defaultGenericInterfaceImplementations.TryGetValue(type.GetGenericTypeDefinition(), out var implementationType))
                     {
-                        type = implementationType.MakeGenericType(type.GetGenericArguments());
+                        return implementationType.MakeGenericType(type.GetGenericArguments());
                     }
                 }
                 else
                 {
                     if (defaultNonGenericInterfaceImplementations.TryGetValue(type, out var implementationType))
                     {
-                        type = implementationType;
+                        return implementationType;
                     }
                 }
             }
+            return type;
+        }
+
+        public override object Create(Type type)
+        {
+            type = GetImplementationType(type);
 
             try
             {
                 return Activator.CreateInstance(type, settings.AllowPrivateConstructors)!;
+            }
+            catch (Exception err)
+            {
+                var message = $"Failed to create an instance of type '{type.FullName}'.";
+                throw new InvalidOperationException(message, err);
+            }
+        }
+
+        public override object Create(Type type, object?[]? args)
+        {
+            if (args == null || args.Length == 0)
+            {
+                return Create(type);
+            }
+
+            type = GetImplementationType(type);
+
+            try
+            {
+                var flags = BindingFlags.Instance | BindingFlags.Public;
+                if (settings.AllowPrivateConstructors)
+                {
+                    flags |= BindingFlags.NonPublic;
+                }
+
+                return Activator.CreateInstance(
+                    type,
+                    flags,
+                    binder: null,
+                    args: args,
+                    culture: null)!;
             }
             catch (Exception err)
             {
@@ -147,7 +185,6 @@ namespace YamlDotNet.Serialization.ObjectFactories
         private MethodInfo[] GetStateMethods(Type attributeType, Type valueType)
         {
             var stateDictionary = stateMethods[attributeType];
-
 
             return stateDictionary.GetOrAdd(valueType, type =>
             {

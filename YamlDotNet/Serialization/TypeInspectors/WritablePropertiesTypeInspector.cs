@@ -1,4 +1,4 @@
-﻿// This file is part of YamlDotNet - A .NET library for YAML.
+// This file is part of YamlDotNet - A .NET library for YAML.
 // Copyright (c) Antoine Aubry and contributors
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy of
@@ -53,13 +53,34 @@ namespace YamlDotNet.Serialization.TypeInspectors
                 && property.GetSetMethod(true)!.GetParameters().Length == 1;
         }
 
+        public override IEnumerable<IConstructorDescriptor> GetConstructors(Type type)
+        {
+            return GetConstructorsInternal(type, typeResolver, includeNonPublicProperties);
+        }
+
         public override IEnumerable<IPropertyDescriptor> GetProperties(Type type, object? container)
         {
-            return type
+            var properties = type
                 .GetProperties(includeNonPublicProperties)
                 .Where(IsValidProperty)
                 .Select(p => (IPropertyDescriptor)new ReflectionPropertyDescriptor(p, typeResolver))
-                .ToArray();
+                .ToList();
+
+            var existingNames = new HashSet<string>(properties.Select(p => p.Name), StringComparer.OrdinalIgnoreCase);
+
+            var constructors = GetConstructors(type);
+            foreach (var ctor in constructors)
+            {
+                foreach (var param in ctor.Parameters)
+                {
+                    if (existingNames.Add(param.Name))
+                    {
+                        properties.Add(param);
+                    }
+                }
+            }
+
+            return properties;
         }
 
         protected class ReflectionPropertyDescriptor : IPropertyDescriptor
