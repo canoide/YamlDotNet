@@ -1,4 +1,4 @@
-﻿// This file is part of YamlDotNet - A .NET library for YAML.
+// This file is part of YamlDotNet - A .NET library for YAML.
 // Copyright (c) Antoine Aubry and contributors
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy of
@@ -108,7 +108,8 @@ namespace YamlDotNet.Serialization
                             defaultScalarStyle,
                             yamlFormatter,
                             enumNamingConvention,
-                            BuildTypeInspector())
+                            BuildTypeInspector(),
+                            isDynamicTypeResolutionEnabled)
                 }
             };
 
@@ -119,6 +120,15 @@ namespace YamlDotNet.Serialization
         }
 
         protected override SerializerBuilder Self { get { return this; } }
+
+        /// <summary>
+        /// Configures whether dynamic runtime type resolution is enabled for polymorphic objects, interfaces, and base types.
+        /// </summary>
+        public new SerializerBuilder WithDynamicTypeResolution(bool enable = true)
+        {
+            base.WithDynamicTypeResolution(enable);
+            return this;
+        }
 
         /// <summary>
         /// Put double quotes around strings that need it, for example Null, True, False, a number. This should be called before any other "With" methods if you want this feature enabled.

@@ -1,4 +1,4 @@
-﻿// This file is part of YamlDotNet - A .NET library for YAML.
+// This file is part of YamlDotNet - A .NET library for YAML.
 // Copyright (c) Antoine Aubry and contributors
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy of
@@ -133,6 +133,23 @@ namespace YamlDotNet.Serialization
         }
 
         protected override DeserializerBuilder Self { get { return this; } }
+
+        /// <summary>
+        /// Configures whether dynamic runtime type resolution is enabled for polymorphic objects, interfaces, and base types.
+        /// </summary>
+        public new DeserializerBuilder WithDynamicTypeResolution(bool enable = true)
+        {
+            base.WithDynamicTypeResolution(enable);
+            if (enable)
+            {
+                WithNodeTypeResolver(new TypeNameInTagNodeTypeResolver(), w => w.OnTop());
+            }
+            else
+            {
+                WithoutNodeTypeResolver<TypeNameInTagNodeTypeResolver>();
+            }
+            return this;
+        }
 
         /// <summary>
         /// Builds the type inspector used by various classes to get information about types and their members.

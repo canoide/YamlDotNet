@@ -1,4 +1,4 @@
-﻿// This file is part of YamlDotNet - A .NET library for YAML.
+// This file is part of YamlDotNet - A .NET library for YAML.
 // Copyright (c) Antoine Aubry and contributors
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy of
@@ -24,23 +24,63 @@ using YamlDotNet.Core.Events;
 
 namespace YamlDotNet.Serialization.NodeTypeResolvers
 {
-    [Obsolete("The mechanism that this class uses to specify type names is non-standard. Register the tags explicitly instead of using this convention.")]
     public sealed class TypeNameInTagNodeTypeResolver : INodeTypeResolver
     {
         bool INodeTypeResolver.Resolve(NodeEvent? nodeEvent, ref Type currentType)
         {
             if (nodeEvent != null && !nodeEvent.Tag.IsEmpty)
             {
-                // If type could not be loaded, make sure to pass resolving
-                // to the next resolver
-                var resolvedType = Type.GetType(nodeEvent.Tag.Value.Substring(1), throwOnError: false);
-                if (resolvedType != null)
+                var tagValue = nodeEvent.Tag.Value;
+                if (tagValue.Length > 0 && tagValue[0] == '!')
                 {
-                    currentType = resolvedType;
-                    return true;
+                    var rawTypeName = tagValue.Substring(1);
+                    var typeName = rawTypeName.Replace("%20", " ");
+                    var resolvedType = TryResolveType(typeName);
+
+                    if (resolvedType != null && currentType.IsAssignableFrom(resolvedType))
+                    {
+                        currentType = resolvedType;
+                        return true;
+                    }
                 }
             }
             return false;
+        }
+
+        private static Type? TryResolveType(string typeName)
+        {
+            var resolvedType = Type.GetType(typeName, throwOnError: false);
+            if (resolvedType != null)
+            {
+                return resolvedType;
+            }
+
+            var commaIdx = typeName.IndexOf(',');
+            var namePart = commaIdx >= 0 ? typeName.Substring(0, commaIdx) : typeName;
+            var asmPart = commaIdx >= 0 ? typeName.Substring(commaIdx) : string.Empty;
+            var namePartFix = namePart.Replace(' ', '+');
+
+            if (namePart.Contains(' '))
+            {
+                resolvedType = Type.GetType(namePartFix + asmPart, throwOnError: false);
+                if (resolvedType != null)
+                {
+                    return resolvedType;
+                }
+            }
+
+            foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
+            {
+                resolvedType = assembly.GetType(namePart, throwOnError: false)
+                    ?? assembly.GetType(namePartFix, throwOnError: false);
+
+                if (resolvedType != null)
+                {
+                    return resolvedType;
+                }
+            }
+
+            return null;
         }
     }
 }
