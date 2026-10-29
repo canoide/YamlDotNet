@@ -1,4 +1,4 @@
-﻿// This file is part of YamlDotNet - A .NET library for YAML.
+// This file is part of YamlDotNet - A .NET library for YAML.
 // Copyright (c) Antoine Aubry and contributors
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy of
@@ -21,6 +21,7 @@
 
 using System;
 using System.Collections;
+using System.Reflection;
 
 namespace YamlDotNet.Serialization.ObjectFactories
 {
@@ -35,6 +36,30 @@ namespace YamlDotNet.Serialization.ObjectFactories
         /// <param name="type">Type of object to create</param>
         /// <returns></returns>
         public abstract object Create(Type type);
+
+        /// <summary>
+        /// Create an object of the specified type using the supplied constructor arguments
+        /// </summary>
+        /// <param name="type">Type of object to create</param>
+        /// <param name="args">Arguments to pass to constructor</param>
+        /// <returns></returns>
+        public virtual object Create(Type type, object?[] args)
+        {
+            if (args == null || args.Length == 0)
+            {
+                return Create(type);
+            }
+
+            try
+            {
+                return Activator.CreateInstance(type, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic, null, args, null)!;
+            }
+            catch (Exception err)
+            {
+                var message = $"Failed to create an instance of type '{type.FullName}'.";
+                throw new InvalidOperationException(message, err);
+            }
+        }
 
         /// <summary>
         /// Creates an array of the specified type with the size specified

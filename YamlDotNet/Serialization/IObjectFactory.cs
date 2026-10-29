@@ -1,4 +1,4 @@
-﻿// This file is part of YamlDotNet - A .NET library for YAML.
+// This file is part of YamlDotNet - A .NET library for YAML.
 // Copyright (c) Antoine Aubry and contributors
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy of
@@ -36,6 +36,17 @@ namespace YamlDotNet.Serialization
         /// Creates an instance of the specified type.
         /// </summary>
         object Create(Type type);
+
+        /// <summary>
+        /// Creates an instance of the specified type using the supplied constructor arguments.
+        /// </summary>
+        /// <param name="type">Type of object to create</param>
+        /// <param name="args">Arguments to pass to constructor</param>
+        /// <returns></returns>
+        object Create(Type type, object?[] args)
+        {
+            return Create(type);
+        }
 
         /// <summary>
         /// Creates a default value for the .net primitive types (string, int, bool, etc)

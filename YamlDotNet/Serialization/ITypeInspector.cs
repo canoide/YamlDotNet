@@ -1,4 +1,4 @@
-﻿// This file is part of YamlDotNet - A .NET library for YAML.
+// This file is part of YamlDotNet - A .NET library for YAML.
 // Copyright (c) Antoine Aubry and contributors
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy of
@@ -22,6 +22,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
+using YamlDotNet.Serialization.TypeInspectors;
 
 namespace YamlDotNet.Serialization
 {
@@ -80,5 +81,15 @@ namespace YamlDotNet.Serialization
         /// <param name="expectedType">The type to convert the string to.</param>
         /// <returns>An instance of the specified type.</returns>
         object? Parse(string value, Type expectedType);
+
+        /// <summary>
+        /// Gets candidate constructors for creating instances of the specified type.
+        /// </summary>
+        /// <param name="type">The type whose constructors are to be enumerated.</param>
+        /// <returns>An enumeration of constructor descriptors.</returns>
+        IEnumerable<IConstructorDescriptor> GetConstructors(Type type)
+        {
+            return TypeInspectorSkeleton.GetConstructorsReflection(type);
+        }
     }
 }

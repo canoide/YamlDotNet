@@ -1,4 +1,4 @@
-﻿// This file is part of YamlDotNet - A .NET library for YAML.
+// This file is part of YamlDotNet - A .NET library for YAML.
 // Copyright (c) Antoine Aubry and contributors
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy of
@@ -30,6 +30,8 @@ namespace YamlDotNet.Serialization.ObjectFactories
     public abstract class ObjectFactoryBase : IObjectFactory
     {
         public abstract object Create(Type type);
+
+        public virtual object Create(Type type, object?[] args) => Create(type);
 
         public virtual object? CreatePrimitive(Type type) => type.IsValueType() ? Activator.CreateInstance(type) : null;
 

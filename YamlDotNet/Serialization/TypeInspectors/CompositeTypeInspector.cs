@@ -1,4 +1,4 @@
-﻿// This file is part of YamlDotNet - A .NET library for YAML.
+// This file is part of YamlDotNet - A .NET library for YAML.
 // Copyright (c) Antoine Aubry and contributors
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy of
@@ -102,6 +102,20 @@ namespace YamlDotNet.Serialization.TypeInspectors
             }
 
             return parsableInspector.Parse(value, expectedType);
+        }
+
+        public override IEnumerable<IConstructorDescriptor> GetConstructors(Type type)
+        {
+            foreach (var inspector in typeInspectors)
+            {
+                var constructors = inspector.GetConstructors(type);
+                if (constructors != null && constructors.Any())
+                {
+                    return constructors;
+                }
+            }
+
+            return base.GetConstructors(type);
         }
     }
 }
