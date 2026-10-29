@@ -1,4 +1,4 @@
-﻿// This file is part of YamlDotNet - A .NET library for YAML.
+// This file is part of YamlDotNet - A .NET library for YAML.
 // Copyright (c) Antoine Aubry and contributors
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy of
@@ -24,6 +24,7 @@ using System.Collections.Generic;
 using YamlDotNet.Core;
 using YamlDotNet.Serialization.Converters;
 using YamlDotNet.Serialization.NamingConventions;
+using YamlDotNet.Serialization.TypeResolvers;
 
 namespace YamlDotNet.Serialization
 {
@@ -40,6 +41,7 @@ namespace YamlDotNet.Serialization
         internal INamingConvention namingConvention = NullNamingConvention.Instance;
         internal INamingConvention enumNamingConvention = NullNamingConvention.Instance;
         internal ITypeResolver typeResolver;
+        internal bool enableDynamicTypeResolution;
         internal readonly YamlAttributeOverrides overrides;
         internal readonly LazyComponentRegistrationList<Nothing, IYamlTypeConverter> typeConverterFactories;
         internal readonly LazyComponentRegistrationList<ITypeInspector, ITypeInspector> typeInspectorFactories;
@@ -116,11 +118,20 @@ namespace YamlDotNet.Serialization
         }
 
         /// <summary>
+        /// Enables dynamic type resolution using <see cref="DynamicTypeResolver"/>.
+        /// </summary>
+        public TBuilder WithDynamicTypeResolver()
+        {
+            return WithTypeResolver(new DynamicTypeResolver());
+        }
+
+        /// <summary>
         /// Sets the <see cref="ITypeResolver" /> that will be used by the (de)serializer.
         /// </summary>
         public TBuilder WithTypeResolver(ITypeResolver typeResolver)
         {
             this.typeResolver = typeResolver ?? throw new ArgumentNullException(nameof(typeResolver));
+            this.enableDynamicTypeResolution = true;
             return Self;
         }
 

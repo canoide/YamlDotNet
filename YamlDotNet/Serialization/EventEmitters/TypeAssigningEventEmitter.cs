@@ -1,4 +1,4 @@
-﻿// This file is part of YamlDotNet - A .NET library for YAML.
+// This file is part of YamlDotNet - A .NET library for YAML.
 // Copyright (c) Antoine Aubry and contributors
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy of
@@ -72,6 +72,8 @@ namespace YamlDotNet.Serialization.EventEmitters
         private readonly YamlFormatter formatter;
         private readonly INamingConvention enumNamingConvention;
         private readonly ITypeInspector typeInspector;
+        private readonly ITypeResolver? typeResolver;
+        private readonly bool enableDynamicTypeResolution;
 
         public TypeAssigningEventEmitter(IEventEmitter nextEmitter,
             IDictionary<Type, TagName> tagMappings,
@@ -81,6 +83,33 @@ namespace YamlDotNet.Serialization.EventEmitters
             YamlFormatter formatter,
             INamingConvention enumNamingConvention,
             ITypeInspector typeInspector)
+            : this(nextEmitter, tagMappings, quoteNecessaryStrings, quoteYaml1_1Strings, defaultScalarStyle, formatter, enumNamingConvention, typeInspector, null, false)
+        {
+        }
+
+        public TypeAssigningEventEmitter(IEventEmitter nextEmitter,
+            IDictionary<Type, TagName> tagMappings,
+            bool quoteNecessaryStrings,
+            bool quoteYaml1_1Strings,
+            ScalarStyle defaultScalarStyle,
+            YamlFormatter formatter,
+            INamingConvention enumNamingConvention,
+            ITypeInspector typeInspector,
+            ITypeResolver? typeResolver)
+            : this(nextEmitter, tagMappings, quoteNecessaryStrings, quoteYaml1_1Strings, defaultScalarStyle, formatter, enumNamingConvention, typeInspector, typeResolver, false)
+        {
+        }
+
+        public TypeAssigningEventEmitter(IEventEmitter nextEmitter,
+            IDictionary<Type, TagName> tagMappings,
+            bool quoteNecessaryStrings,
+            bool quoteYaml1_1Strings,
+            ScalarStyle defaultScalarStyle,
+            YamlFormatter formatter,
+            INamingConvention enumNamingConvention,
+            ITypeInspector typeInspector,
+            ITypeResolver? typeResolver,
+            bool enableDynamicTypeResolution)
             : base(nextEmitter)
         {
             this.defaultScalarStyle = defaultScalarStyle;
@@ -98,6 +127,8 @@ namespace YamlDotNet.Serialization.EventEmitters
 #endif
             this.enumNamingConvention = enumNamingConvention;
             this.typeInspector = typeInspector;
+            this.typeResolver = typeResolver;
+            this.enableDynamicTypeResolution = enableDynamicTypeResolution;
         }
 
         public override void Emit(ScalarEventInfo eventInfo, IEmitter emitter)
@@ -236,6 +267,55 @@ namespace YamlDotNet.Serialization.EventEmitters
             {
                 eventInfo.Tag = tag;
             }
+            else if (enableDynamicTypeResolution)
+            {
+                if (eventInfo.Source.Type != eventInfo.Source.StaticType && ShouldEmitDynamicTag(eventInfo.Source.Type, eventInfo.Source.StaticType))
+                {
+                    eventInfo.Tag = "!" + (eventInfo.Source.Type.FullName ?? eventInfo.Source.Type.Name);
+                }
+            }
+        }
+
+        private static bool ShouldEmitDynamicTag(Type actualType, Type staticType)
+        {
+            if (actualType == staticType)
+            {
+                return false;
+            }
+
+            var typeCode = actualType.GetTypeCode();
+            if (typeCode != TypeCode.Object)
+            {
+                return false;
+            }
+
+            if (actualType == typeof(TimeSpan) || actualType == typeof(Guid) || actualType == typeof(Uri) || typeof(Type).IsAssignableFrom(actualType))
+            {
+                return false;
+            }
+
+            if (IsStandardFrameworkContainer(actualType))
+            {
+                return false;
+            }
+
+            return true;
+        }
+
+        private static bool IsStandardFrameworkContainer(Type type)
+        {
+            if (type.IsArray)
+            {
+                var elementType = type.GetElementType();
+                return elementType != null && (elementType.GetTypeCode() != TypeCode.Object || elementType == typeof(object) || elementType.Assembly == typeof(object).Assembly);
+            }
+
+            if (type.Assembly == typeof(object).Assembly || type.Assembly == typeof(List<>).Assembly)
+            {
+                return true;
+            }
+
+            return false;
         }
 
         private bool IsSpecialStringValue(string value)
