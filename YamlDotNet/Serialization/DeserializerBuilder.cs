@@ -1,4 +1,4 @@
-﻿// This file is part of YamlDotNet - A .NET library for YAML.
+// This file is part of YamlDotNet - A .NET library for YAML.
 // Copyright (c) Antoine Aubry and contributors
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy of
@@ -64,6 +64,7 @@ namespace YamlDotNet.Serialization
         private bool enforceNullability;
         private bool caseInsensitivePropertyMatching;
         private bool enforceRequiredProperties;
+        private bool enableTypeDiscriminator;
         private int? maximumRecursion;
 
         /// <summary>
@@ -114,7 +115,8 @@ namespace YamlDotNet.Serialization
                         enforceNullability,
                         caseInsensitivePropertyMatching,
                         enforceRequiredProperties,
-                        BuildTypeConverters())
+                        BuildTypeConverters(),
+                        enableTypeDiscriminator)
                 },
                 { typeof(FsharpListNodeDeserializer), _ => new FsharpListNodeDeserializer(BuildTypeInspector(), enumNamingConvention) },
             };
@@ -135,12 +137,21 @@ namespace YamlDotNet.Serialization
         protected override DeserializerBuilder Self { get { return this; } }
 
         /// <summary>
+        /// Enables property-based type discriminators using $type for polymorphic types.
+        /// </summary>
+        public DeserializerBuilder WithTypeDiscriminator(bool enable = true)
+        {
+            enableTypeDiscriminator = enable;
+            return this;
+        }
+
+        /// <summary>
         /// Builds the type inspector used by various classes to get information about types and their members.
         /// </summary>
         /// <returns></returns>
         public ITypeInspector BuildTypeInspector()
         {
-            ITypeInspector innerInspector = new WritablePropertiesTypeInspector(typeResolver, includeNonPublicProperties);
+            ITypeInspector innerInspector = new WritablePropertiesTypeInspector(typeResolver, includeNonPublicProperties, enableTypeDiscriminator);
 
             if (!ignoreFields)
             {
@@ -148,6 +159,11 @@ namespace YamlDotNet.Serialization
                     new ReadableFieldsTypeInspector(typeResolver),
                     innerInspector
                 );
+            }
+
+            if (enableTypeDiscriminator)
+            {
+                innerInspector = new TypeDiscriminatorTypeInspector(innerInspector);
             }
 
             return typeInspectorFactories.BuildComponentChain(innerInspector);
