@@ -1,4 +1,4 @@
-﻿// This file is part of YamlDotNet - A .NET library for YAML.
+// This file is part of YamlDotNet - A .NET library for YAML.
 // Copyright (c) Antoine Aubry and contributors
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy of
@@ -108,6 +108,48 @@ namespace YamlDotNet.Serialization.ObjectFactories
             try
             {
                 return Activator.CreateInstance(type, settings.AllowPrivateConstructors)!;
+            }
+            catch (Exception err)
+            {
+                var message = $"Failed to create an instance of type '{type.FullName}'.";
+                throw new InvalidOperationException(message, err);
+            }
+        }
+
+        public override object Create(Type type, object?[] args)
+        {
+            if (args == null || args.Length == 0 || (!settings.AllowPrivateConstructors && !type.IsVisible))
+            {
+                return Create(type);
+            }
+
+            if (type.IsInterface())
+            {
+                if (type.IsGenericType())
+                {
+                    if (defaultGenericInterfaceImplementations.TryGetValue(type.GetGenericTypeDefinition(), out var implementationType))
+                    {
+                        type = implementationType.MakeGenericType(type.GetGenericArguments());
+                    }
+                }
+                else
+                {
+                    if (defaultNonGenericInterfaceImplementations.TryGetValue(type, out var implementationType))
+                    {
+                        type = implementationType;
+                    }
+                }
+            }
+
+            try
+            {
+                var bindingFlags = BindingFlags.Instance | BindingFlags.Public;
+                if (settings.AllowPrivateConstructors)
+                {
+                    bindingFlags |= BindingFlags.NonPublic;
+                }
+
+                return Activator.CreateInstance(type, bindingFlags, null, args, null)!;
             }
             catch (Exception err)
             {

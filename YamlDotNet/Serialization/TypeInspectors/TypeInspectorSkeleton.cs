@@ -1,4 +1,4 @@
-﻿// This file is part of YamlDotNet - A .NET library for YAML.
+// This file is part of YamlDotNet - A .NET library for YAML.
 // Copyright (c) Antoine Aubry and contributors
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy of
@@ -107,5 +107,29 @@ namespace YamlDotNet.Serialization.TypeInspectors
         public abstract bool HasParseMethod(Type type);
 
         public abstract object? Parse(string value, Type expectedType);
+
+        public virtual IEnumerable<IConstructorDescriptor> GetConstructors(Type type)
+        {
+            return GetConstructorsReflection(type);
+        }
+
+        public static IEnumerable<IConstructorDescriptor> GetConstructorsReflection(Type type)
+        {
+            if (type == null || type.IsAbstract || type.IsInterface)
+            {
+                return Enumerable.Empty<IConstructorDescriptor>();
+            }
+
+            var ctors = type.GetConstructors(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+            if (ctors.Length == 0)
+            {
+                return Enumerable.Empty<IConstructorDescriptor>();
+            }
+
+            var publicCtors = ctors.Where(c => c.IsPublic).ToList();
+            var list = publicCtors.Count > 0 ? publicCtors : ctors.ToList();
+
+            return list.Select(c => (IConstructorDescriptor)new ConstructorDescriptor(c));
+        }
     }
 }
