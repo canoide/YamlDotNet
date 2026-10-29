@@ -1,4 +1,4 @@
-﻿// This file is part of YamlDotNet - A .NET library for YAML.
+// This file is part of YamlDotNet - A .NET library for YAML.
 // Copyright (c) Antoine Aubry and contributors
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy of
@@ -43,6 +43,7 @@ namespace YamlDotNet.Serialization.NodeDeserializers
         private readonly bool caseInsensitivePropertyMatching;
         private readonly bool enforceRequiredProperties;
         private readonly TypeConverterCache typeConverters;
+        private readonly bool allowParameterizedConstructors;
 
         public ObjectNodeDeserializer(IObjectFactory objectFactory,
             ITypeInspector typeInspector,
@@ -54,6 +55,21 @@ namespace YamlDotNet.Serialization.NodeDeserializers
             bool caseInsensitivePropertyMatching,
             bool enforceRequiredProperties,
             IEnumerable<IYamlTypeConverter> typeConverters)
+            : this(objectFactory, typeInspector, ignoreUnmatched, duplicateKeyChecking, typeConverter, enumNamingConvention, enforceNullability, caseInsensitivePropertyMatching, enforceRequiredProperties, typeConverters, false)
+        {
+        }
+
+        public ObjectNodeDeserializer(IObjectFactory objectFactory,
+            ITypeInspector typeInspector,
+            bool ignoreUnmatched,
+            bool duplicateKeyChecking,
+            ITypeConverter typeConverter,
+            INamingConvention enumNamingConvention,
+            bool enforceNullability,
+            bool caseInsensitivePropertyMatching,
+            bool enforceRequiredProperties,
+            IEnumerable<IYamlTypeConverter> typeConverters,
+            bool allowParameterizedConstructors)
         {
             this.objectFactory = objectFactory ?? throw new ArgumentNullException(nameof(objectFactory));
             this.typeInspector = typeInspector ?? throw new ArgumentNullException(nameof(ObjectNodeDeserializer.typeInspector));
@@ -65,6 +81,7 @@ namespace YamlDotNet.Serialization.NodeDeserializers
             this.caseInsensitivePropertyMatching = caseInsensitivePropertyMatching;
             this.enforceRequiredProperties = enforceRequiredProperties;
             this.typeConverters = new TypeConverterCache(typeConverters);
+            this.allowParameterizedConstructors = allowParameterizedConstructors;
         }
 
         public bool Deserialize(IParser parser, Type expectedType, Func<IParser, Type, object?> nestedObjectDeserializer, out object? value, ObjectDeserializer rootDeserializer)
@@ -80,6 +97,19 @@ namespace YamlDotNet.Serialization.NodeDeserializers
                 ?? FsharpHelper.GetOptionUnderlyingType(expectedType)
                 ?? expectedType;
 
+            var constructors = allowParameterizedConstructors ? typeInspector.GetConstructors(implementationType).ToList() : new List<IConstructorDescriptor>();
+            var hasParameterizedConstructors = constructors.Any(c => c.Parameters.Count > 0);
+
+            if (!allowParameterizedConstructors || !hasParameterizedConstructors)
+            {
+                return DeserializeStandard(parser, implementationType, nestedObjectDeserializer, out value, rootDeserializer);
+            }
+
+            return DeserializeWithParameterizedConstructor(parser, implementationType, constructors, nestedObjectDeserializer, out value, rootDeserializer);
+        }
+
+        private bool DeserializeStandard(IParser parser, Type implementationType, Func<IParser, Type, object?> nestedObjectDeserializer, out object? value, ObjectDeserializer rootDeserializer)
+        {
             value = objectFactory.Create(implementationType);
             objectFactory.ExecuteOnDeserializing(value);
 
@@ -107,8 +137,8 @@ namespace YamlDotNet.Serialization.NodeDeserializers
                     object? propertyValue;
                     if (property.ConverterType != null)
                     {
-                        var typeConverter = typeConverters.GetConverterByType(property.ConverterType);
-                        propertyValue = typeConverter.ReadYaml(parser, property.Type, rootDeserializer);
+                        var typeConverterInstance = typeConverters.GetConverterByType(property.ConverterType);
+                        propertyValue = typeConverterInstance.ReadYaml(parser, property.Type, rootDeserializer);
                     }
                     else
                     {
@@ -172,6 +202,292 @@ namespace YamlDotNet.Serialization.NodeDeserializers
 
             objectFactory.ExecuteOnDeserialized(value);
             return true;
+        }
+
+        private struct BufferedEntry
+        {
+            public Scalar KeyScalar { get; }
+            public string Key { get; }
+            public List<ParsingEvent> ValueEvents { get; }
+
+            public BufferedEntry(Scalar keyScalar, string key, List<ParsingEvent> valueEvents)
+            {
+                KeyScalar = keyScalar;
+                Key = key;
+                ValueEvents = valueEvents;
+            }
+        }
+
+        private bool DeserializeWithParameterizedConstructor(
+            IParser parser,
+            Type implementationType,
+            List<IConstructorDescriptor> constructors,
+            Func<IParser, Type, object?> nestedObjectDeserializer,
+            out object? value,
+            ObjectDeserializer rootDeserializer)
+        {
+            var bufferedEntries = new List<BufferedEntry>();
+            var consumedProperties = new HashSet<string>(StringComparer.Ordinal);
+            var mark = Mark.Empty;
+
+            while (!parser.TryConsume<MappingEnd>(out _))
+            {
+                var propertyName = parser.Consume<Scalar>();
+                if (duplicateKeyChecking && !consumedProperties.Add(propertyName.Value))
+                {
+                    throw new YamlException(propertyName.Start, propertyName.End, $"Encountered duplicate key {propertyName.Value}");
+                }
+
+                var valueEvents = new List<ParsingEvent>();
+                var depth = 0;
+                do
+                {
+                    var next = parser.Consume<ParsingEvent>();
+                    depth += next.NestingIncrease;
+                    valueEvents.Add(next);
+                } while (depth > 0);
+
+                bufferedEntries.Add(new BufferedEntry(propertyName, propertyName.Value, valueEvents));
+                mark = propertyName.End;
+            }
+
+            var comparison = caseInsensitivePropertyMatching ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+
+            // Find best matching constructor
+            IConstructorDescriptor? bestCtor = null;
+            int bestMatchCount = -1;
+            int bestTotalParamCount = -1;
+
+            foreach (var ctor in constructors)
+            {
+                if (ctor.Parameters.Count == 0)
+                {
+                    continue; // Parameterless constructor is fallback
+                }
+
+                int matchCount = 0;
+                bool allRequiredMatched = true;
+
+                foreach (var param in ctor.Parameters)
+                {
+                    bool found = bufferedEntries.Any(e => e.Key.Equals(param.Name, comparison));
+                    if (found)
+                    {
+                        matchCount++;
+                    }
+                    else
+                    {
+                        var isOptional = (param is IParameterDescriptor pd && pd.HasDefaultValue) || !param.Required;
+                        if (!isOptional)
+                        {
+                            allRequiredMatched = false;
+                        }
+                    }
+                }
+
+                if (!allRequiredMatched && !ctor.IsPreferred)
+                {
+                    continue;
+                }
+
+                if (ctor.IsPreferred)
+                {
+                    if (bestCtor == null || !bestCtor.IsPreferred || matchCount > bestMatchCount)
+                    {
+                        bestCtor = ctor;
+                        bestMatchCount = matchCount;
+                        bestTotalParamCount = ctor.Parameters.Count;
+                    }
+                }
+                else if (bestCtor == null || (!bestCtor.IsPreferred && (matchCount > bestMatchCount || (matchCount == bestMatchCount && ctor.Parameters.Count > bestTotalParamCount))))
+                {
+                    bestCtor = ctor;
+                    bestMatchCount = matchCount;
+                    bestTotalParamCount = ctor.Parameters.Count;
+                }
+            }
+
+            // Fallback to parameterless constructor if no parameterized constructor matched
+            if (bestCtor == null)
+            {
+                value = objectFactory.Create(implementationType);
+                objectFactory.ExecuteOnDeserializing(value);
+                ApplyBufferedEntriesToInstance(value, implementationType, bufferedEntries, new HashSet<string>(StringComparer.Ordinal), nestedObjectDeserializer, rootDeserializer, mark);
+                objectFactory.ExecuteOnDeserialized(value);
+                return true;
+            }
+
+            var args = new object?[bestCtor.Parameters.Count];
+            var consumedKeys = new HashSet<string>(StringComparer.Ordinal);
+
+            for (int i = 0; i < bestCtor.Parameters.Count; i++)
+            {
+                var param = bestCtor.Parameters[i];
+                var entryIndex = bufferedEntries.FindIndex(e => e.Key.Equals(param.Name, comparison));
+
+                if (entryIndex >= 0)
+                {
+                    var entry = bufferedEntries[entryIndex];
+                    consumedKeys.Add(entry.Key);
+
+                    object? paramValue;
+                    var bufferedParser = new BufferedEventsParser(entry.ValueEvents);
+
+                    if (param.ConverterType != null)
+                    {
+                        var converter = typeConverters.GetConverterByType(param.ConverterType);
+                        paramValue = converter.ReadYaml(bufferedParser, param.Type, rootDeserializer);
+                    }
+                    else
+                    {
+                        paramValue = nestedObjectDeserializer(bufferedParser, param.Type);
+                    }
+
+                    var convertedValue = typeConverter.ChangeType(paramValue, param.Type, enumNamingConvention, typeInspector);
+                    NullCheck(convertedValue, param, entry.KeyScalar);
+                    args[i] = convertedValue;
+                }
+                else if (param is IParameterDescriptor pd && pd.HasDefaultValue)
+                {
+                    args[i] = pd.DefaultValue;
+                }
+                else if (param.Type.IsValueType)
+                {
+                    args[i] = objectFactory.CreatePrimitive(param.Type) ?? Activator.CreateInstance(param.Type);
+                }
+                else
+                {
+                    args[i] = null;
+                }
+            }
+
+            value = objectFactory.Create(implementationType, args);
+            objectFactory.ExecuteOnDeserializing(value);
+
+            ApplyBufferedEntriesToInstance(value, implementationType, bufferedEntries, consumedKeys, nestedObjectDeserializer, rootDeserializer, mark);
+
+            objectFactory.ExecuteOnDeserialized(value);
+            return true;
+        }
+
+        private void ApplyBufferedEntriesToInstance(
+            object instance,
+            Type implementationType,
+            List<BufferedEntry> bufferedEntries,
+            HashSet<string> consumedKeys,
+            Func<IParser, Type, object?> nestedObjectDeserializer,
+            ObjectDeserializer rootDeserializer,
+            Mark mark)
+        {
+            var consumedObjectProperties = new HashSet<string>(StringComparer.Ordinal);
+
+            foreach (var entry in bufferedEntries)
+            {
+                if (consumedKeys.Contains(entry.Key))
+                {
+                    continue;
+                }
+
+                try
+                {
+                    var property = typeInspector.GetProperty(implementationType, null, entry.Key, ignoreUnmatched, caseInsensitivePropertyMatching);
+                    if (property == null)
+                    {
+                        continue;
+                    }
+                    consumedObjectProperties.Add(property.Name);
+
+                    if (!property.CanWrite)
+                    {
+                        continue;
+                    }
+
+                    object? propertyValue;
+                    var bufferedParser = new BufferedEventsParser(entry.ValueEvents);
+
+                    if (property.ConverterType != null)
+                    {
+                        var typeConverterInstance = typeConverters.GetConverterByType(property.ConverterType);
+                        propertyValue = typeConverterInstance.ReadYaml(bufferedParser, property.Type, rootDeserializer);
+                    }
+                    else
+                    {
+                        propertyValue = nestedObjectDeserializer(bufferedParser, property.Type);
+                    }
+
+                    if (propertyValue is IValuePromise propertyValuePromise)
+                    {
+                        var instanceRef = instance;
+                        propertyValuePromise.ValueAvailable += v =>
+                        {
+                            var convertedValue = typeConverter.ChangeType(v, property.Type, enumNamingConvention, typeInspector);
+                            NullCheck(convertedValue, property, entry.KeyScalar);
+                            property.Write(instanceRef, convertedValue);
+                        };
+                    }
+                    else
+                    {
+                        var convertedValue = typeConverter.ChangeType(propertyValue, property.Type, enumNamingConvention, typeInspector);
+                        NullCheck(convertedValue, property, entry.KeyScalar);
+                        property.Write(instance, convertedValue);
+                    }
+                }
+                catch (SerializationException ex)
+                {
+                    throw new YamlException(entry.KeyScalar.Start, entry.KeyScalar.End, ex.Message);
+                }
+                catch (YamlException)
+                {
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    throw new YamlException(entry.KeyScalar.Start, entry.KeyScalar.End, "Exception during deserialization", ex);
+                }
+            }
+
+            if (enforceRequiredProperties)
+            {
+                var properties = typeInspector.GetProperties(implementationType, instance);
+                var missingPropertyNames = new List<string>();
+                foreach (var property in properties)
+                {
+                    if (property.Required && !consumedObjectProperties.Contains(property.Name) && !consumedKeys.Contains(property.Name))
+                    {
+                        missingPropertyNames.Add(property.Name);
+                    }
+                }
+
+                if (missingPropertyNames.Count > 0)
+                {
+                    var propertyNames = string.Join(",", missingPropertyNames);
+                    throw new YamlException(mark, mark, $"Missing properties, '{propertyNames}' in source yaml.");
+                }
+            }
+        }
+
+        private class BufferedEventsParser : IParser
+        {
+            private readonly List<ParsingEvent> events;
+            private int index;
+
+            public BufferedEventsParser(List<ParsingEvent> events)
+            {
+                this.events = events;
+                this.index = 0;
+            }
+
+            public ParsingEvent? Current => index < events.Count ? events[index] : null;
+
+            public bool MoveNext()
+            {
+                if (index < events.Count)
+                {
+                    index++;
+                    return index < events.Count;
+                }
+                return false;
+            }
         }
 
         public void NullCheck(object? value, IPropertyDescriptor property, Scalar propertyName)

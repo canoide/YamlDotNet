@@ -1,4 +1,4 @@
-﻿// This file is part of YamlDotNet - A .NET library for YAML.
+// This file is part of YamlDotNet - A .NET library for YAML.
 // Copyright (c) Antoine Aubry and contributors
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy of
@@ -35,6 +35,8 @@ namespace YamlDotNet.Serialization.TypeInspectors
         public abstract string GetEnumValue(object enumValue);
 
         public abstract IEnumerable<IPropertyDescriptor> GetProperties(Type type, object? container);
+
+        public virtual IEnumerable<IConstructorDescriptor> GetConstructors(Type type) => Enumerable.Empty<IConstructorDescriptor>();
 
         public IPropertyDescriptor GetProperty(Type type, object? container, string name, [MaybeNullWhen(true)] bool ignoreUnmatched, bool caseInsensitivePropertyMatching)
         {

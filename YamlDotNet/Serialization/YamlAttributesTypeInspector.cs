@@ -1,4 +1,4 @@
-﻿// This file is part of YamlDotNet - A .NET library for YAML.
+// This file is part of YamlDotNet - A .NET library for YAML.
 // Copyright (c) Antoine Aubry and contributors
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy of
@@ -40,7 +40,43 @@ namespace YamlDotNet.Serialization
 
         public override string GetEnumName(Type enumType, string name) => innerTypeDescriptor.GetEnumName(enumType, name);
 
-        public override string GetEnumValue(object enumValue) => innerTypeDescriptor.GetEnumValue(enumValue);
+        public override string GetEnumValue(object enumValue) => this.innerTypeDescriptor.GetEnumValue(enumValue);
+
+        public override IEnumerable<IConstructorDescriptor> GetConstructors(Type type)
+        {
+            return innerTypeDescriptor.GetConstructors(type)
+                .Select(c =>
+                {
+                    var parameters = c.Parameters
+                        .Where(p => p.GetCustomAttribute<YamlIgnoreAttribute>() == null)
+                        .Select(p =>
+                        {
+                            var descriptor = new PropertyDescriptor(p);
+                            var member = p.GetCustomAttribute<YamlMemberAttribute>();
+                            if (member != null)
+                            {
+                                if (member.SerializeAs != null)
+                                {
+                                    descriptor.TypeOverride = member.SerializeAs;
+                                }
+
+                                descriptor.Order = member.Order;
+                                descriptor.ScalarStyle = member.ScalarStyle;
+
+                                if (member.Alias != null)
+                                {
+                                    descriptor.Name = member.Alias;
+                                }
+                            }
+
+                            return (IPropertyDescriptor)descriptor;
+                        })
+                        .OrderBy(p => p.Order)
+                        .ToList();
+
+                    return (IConstructorDescriptor)new ConstructorDescriptor(c.Constructor, parameters, c.IsPreferred);
+                });
+        }
 
         public override IEnumerable<IPropertyDescriptor> GetProperties(Type type, object? container)
         {

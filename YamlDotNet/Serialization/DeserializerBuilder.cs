@@ -1,4 +1,4 @@
-﻿// This file is part of YamlDotNet - A .NET library for YAML.
+// This file is part of YamlDotNet - A .NET library for YAML.
 // Copyright (c) Antoine Aubry and contributors
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy of
@@ -64,6 +64,7 @@ namespace YamlDotNet.Serialization
         private bool enforceNullability;
         private bool caseInsensitivePropertyMatching;
         private bool enforceRequiredProperties;
+        private bool allowParameterizedConstructors;
         private int? maximumRecursion;
 
         /// <summary>
@@ -114,7 +115,8 @@ namespace YamlDotNet.Serialization
                         enforceNullability,
                         caseInsensitivePropertyMatching,
                         enforceRequiredProperties,
-                        BuildTypeConverters())
+                        BuildTypeConverters(),
+                        allowParameterizedConstructors)
                 },
                 { typeof(FsharpListNodeDeserializer), _ => new FsharpListNodeDeserializer(BuildTypeInspector(), enumNamingConvention) },
             };
@@ -356,6 +358,16 @@ namespace YamlDotNet.Serialization
         public DeserializerBuilder WithCaseInsensitivePropertyMatching()
         {
             caseInsensitivePropertyMatching = true;
+            return this;
+        }
+
+        /// <summary>
+        /// Enables support for parameterized constructors and immutable object deserialization.
+        /// </summary>
+        /// <returns></returns>
+        public DeserializerBuilder WithParameterizedConstructors()
+        {
+            allowParameterizedConstructors = true;
             return this;
         }
 

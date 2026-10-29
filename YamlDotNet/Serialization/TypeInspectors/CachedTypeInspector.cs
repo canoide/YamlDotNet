@@ -1,4 +1,4 @@
-﻿// This file is part of YamlDotNet - A .NET library for YAML.
+// This file is part of YamlDotNet - A .NET library for YAML.
 // Copyright (c) Antoine Aubry and contributors
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy of
@@ -34,6 +34,7 @@ namespace YamlDotNet.Serialization.TypeInspectors
     {
         private readonly ITypeInspector innerTypeDescriptor;
         private readonly ConcurrentDictionary<Type, List<IPropertyDescriptor>> cache = new ConcurrentDictionary<Type, List<IPropertyDescriptor>>();
+        private readonly ConcurrentDictionary<Type, List<IConstructorDescriptor>> constructorCache = new ConcurrentDictionary<Type, List<IConstructorDescriptor>>();
         private readonly ConcurrentDictionary<Type, ConcurrentDictionary<string, string>> enumNameCache = new ConcurrentDictionary<Type, ConcurrentDictionary<string, string>>();
         private readonly ConcurrentDictionary<object, string> enumValueCache = new ConcurrentDictionary<object, string>();
         private readonly ConcurrentDictionary<Type, bool> hasParseMethodCache = new ConcurrentDictionary<Type, bool>();
@@ -64,6 +65,12 @@ namespace YamlDotNet.Serialization.TypeInspectors
             },
             (enumValue, innerTypeDescriptor));
             return result;
+        }
+
+        public override IEnumerable<IConstructorDescriptor> GetConstructors(Type type)
+        {
+            return constructorCache.GetOrAdd(type, static (t, typeDescriptor) =>
+                typeDescriptor.GetConstructors(t).ToList(), innerTypeDescriptor);
         }
 
         public override IEnumerable<IPropertyDescriptor> GetProperties(Type type, object? container)

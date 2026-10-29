@@ -1,4 +1,4 @@
-﻿// This file is part of YamlDotNet - A .NET library for YAML.
+// This file is part of YamlDotNet - A .NET library for YAML.
 // Copyright (c) Antoine Aubry and contributors
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy of
@@ -20,12 +20,13 @@
 // SOFTWARE.
 
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using System.Runtime.Serialization;
-using System.Text;
-using System.Threading.Tasks;
+using YamlDotNet.Core;
+using YamlDotNet.Serialization.Utilities;
 
 namespace YamlDotNet.Serialization.TypeInspectors
 {
@@ -45,6 +46,7 @@ namespace YamlDotNet.Serialization.TypeInspectors
 #endif
             return name;
         }
+
         public override string GetEnumValue(object enumValue)
         {
             if (enumValue == null)
@@ -83,6 +85,106 @@ namespace YamlDotNet.Serialization.TypeInspectors
             }
 
             return method.Invoke(null, new object[] { value });
+        }
+
+        protected static IEnumerable<IConstructorDescriptor> GetConstructorsInternal(Type type, ITypeResolver typeResolver, bool includeNonPublicProperties)
+        {
+            var flags = BindingFlags.Instance | BindingFlags.Public;
+            if (includeNonPublicProperties)
+            {
+                flags |= BindingFlags.NonPublic;
+            }
+
+            var constructors = type.GetConstructors(flags);
+            var result = new List<IConstructorDescriptor>();
+
+            var allProps = type.GetProperties(flags);
+
+            foreach (var ctor in constructors)
+            {
+                var parameters = ctor.GetParameters();
+                var paramDescriptors = new List<IPropertyDescriptor>();
+
+                foreach (var param in parameters)
+                {
+                    var matchingProperty = allProps.FirstOrDefault(p =>
+                        string.Equals(p.Name, param.Name, StringComparison.OrdinalIgnoreCase));
+
+                    paramDescriptors.Add(new ReflectionParameterDescriptor(param, matchingProperty, typeResolver));
+                }
+
+                var isPreferred = ctor.GetCustomAttribute<YamlConstructorAttribute>() != null;
+                result.Add(new ConstructorDescriptor(ctor, paramDescriptors, isPreferred));
+            }
+
+            return result;
+        }
+
+        protected class ReflectionParameterDescriptor : IParameterDescriptor
+        {
+            private readonly ParameterInfo parameterInfo;
+            private readonly PropertyInfo? matchingProperty;
+            private readonly ITypeResolver typeResolver;
+            private ConcurrentDictionary<Type, Attribute?>? customAttributeCache;
+
+            public ReflectionParameterDescriptor(ParameterInfo parameterInfo, PropertyInfo? matchingProperty, ITypeResolver typeResolver)
+            {
+                this.parameterInfo = parameterInfo ?? throw new ArgumentNullException(nameof(parameterInfo));
+                this.matchingProperty = matchingProperty;
+                this.typeResolver = typeResolver ?? throw new ArgumentNullException(nameof(typeResolver));
+                ScalarStyle = ScalarStyle.Any;
+
+                var converterAttribute = parameterInfo.GetCustomAttribute<YamlConverterAttribute>()
+                    ?? matchingProperty?.GetCustomAttribute<YamlConverterAttribute>();
+                if (converterAttribute != null)
+                {
+                    ConverterType = converterAttribute.ConverterType;
+                }
+            }
+
+            public ParameterInfo ParameterInfo => parameterInfo;
+            public string Name => parameterInfo.Name ?? string.Empty;
+            public bool Required => !parameterInfo.IsOptional;
+            public Type Type => parameterInfo.ParameterType;
+            public Type? TypeOverride { get; set; }
+            public Type? ConverterType { get; set; }
+            public bool AllowNulls => parameterInfo.AcceptsNull();
+            public int Order { get; set; }
+            public bool CanWrite => true;
+            public ScalarStyle ScalarStyle { get; set; }
+            public bool HasDefaultValue => parameterInfo.HasDefaultValue;
+            public object? DefaultValue => parameterInfo.DefaultValue;
+
+            public void Write(object target, object? value)
+            {
+                if (matchingProperty != null && matchingProperty.CanWrite)
+                {
+                    matchingProperty.SetValue(target, value, null);
+                }
+            }
+
+            public T? GetCustomAttribute<T>() where T : Attribute
+            {
+                var cache = customAttributeCache ??= new ConcurrentDictionary<Type, Attribute?>();
+                if (!cache.TryGetValue(typeof(T), out var attribute))
+                {
+                    attribute = (T?)parameterInfo.GetAllCustomAttributes<T>().FirstOrDefault()
+                        ?? (T?)matchingProperty?.GetAllCustomAttributes<T>().FirstOrDefault();
+                    cache[typeof(T)] = attribute;
+                }
+                return (T?)attribute;
+            }
+
+            public IObjectDescriptor Read(object target)
+            {
+                if (matchingProperty != null && matchingProperty.CanRead)
+                {
+                    var propertyValue = matchingProperty.ReadValue(target);
+                    var actualType = TypeOverride ?? typeResolver.Resolve(Type, propertyValue);
+                    return new ObjectDescriptor(propertyValue, actualType, Type, ScalarStyle);
+                }
+                return new ObjectDescriptor(null, Type, Type, ScalarStyle);
+            }
         }
     }
 }

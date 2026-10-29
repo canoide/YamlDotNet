@@ -1,4 +1,4 @@
-﻿// This file is part of YamlDotNet - A .NET library for YAML.
+// This file is part of YamlDotNet - A .NET library for YAML.
 // Copyright (c) Antoine Aubry and contributors
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy of
@@ -303,6 +303,20 @@ namespace YamlDotNet
         public static Attribute[] GetAllCustomAttributes<TAttribute>(this PropertyInfo member)
         {
             return Attribute.GetCustomAttributes(member, typeof(TAttribute), inherit: true);
+        }
+
+        public static Attribute[] GetAllCustomAttributes<TAttribute>(this ParameterInfo parameter)
+        {
+            return Attribute.GetCustomAttributes(parameter, typeof(TAttribute), inherit: true);
+        }
+
+        public static bool AcceptsNull(this ParameterInfo parameter)
+        {
+            if (parameter.ParameterType.IsValueType && Nullable.GetUnderlyingType(parameter.ParameterType) == null)
+            {
+                return false;
+            }
+            return true;
         }
 
         public static bool AcceptsNull(this MemberInfo member)

@@ -1,4 +1,4 @@
-﻿// This file is part of YamlDotNet - A .NET library for YAML.
+// This file is part of YamlDotNet - A .NET library for YAML.
 // Copyright (c) Antoine Aubry and contributors
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy of
@@ -51,6 +51,13 @@ namespace YamlDotNet.Serialization
         /// <param name="caseInsensitivePropertyMatching">If true use case-insitivity when choosing the property or field.</param>
         /// <returns></returns>
         IPropertyDescriptor GetProperty(Type type, object? container, string name, [MaybeNullWhen(true)] bool ignoreUnmatched, bool caseInsensitivePropertyMatching);
+
+        /// <summary>
+        /// Gets the constructors of the specified type.
+        /// </summary>
+        /// <param name="type">The type whose constructors are to be enumerated.</param>
+        /// <returns></returns>
+        IEnumerable<IConstructorDescriptor> GetConstructors(Type type);
 
         /// <summary>
         /// Returns the actual name from the EnumMember attribute

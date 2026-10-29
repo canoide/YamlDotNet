@@ -1,4 +1,4 @@
-﻿// This file is part of YamlDotNet - A .NET library for YAML.
+// This file is part of YamlDotNet - A .NET library for YAML.
 // Copyright (c) Antoine Aubry and contributors
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy of
@@ -43,6 +43,25 @@ namespace YamlDotNet.Serialization.TypeInspectors
         public override string GetEnumName(Type enumType, string name) => this.innerTypeDescriptor.GetEnumName(enumType, name);
 
         public override string GetEnumValue(object enumValue) => this.innerTypeDescriptor.GetEnumValue(enumValue);
+
+        public override IEnumerable<IConstructorDescriptor> GetConstructors(Type type)
+        {
+            return innerTypeDescriptor.GetConstructors(type)
+                .Select(c =>
+                {
+                    var parameters = c.Parameters.Select(p =>
+                    {
+                        var attribute = p.GetCustomAttribute<YamlMemberAttribute>();
+                        if (attribute != null && !attribute.ApplyNamingConventions)
+                        {
+                            return p;
+                        }
+                        return (IPropertyDescriptor)new PropertyDescriptor(p) { Name = namingConvention.Apply(p.Name) };
+                    }).ToList();
+
+                    return (IConstructorDescriptor)new ConstructorDescriptor(c.Constructor, parameters, c.IsPreferred);
+                });
+        }
 
         public override IEnumerable<IPropertyDescriptor> GetProperties(Type type, object? container)
         {

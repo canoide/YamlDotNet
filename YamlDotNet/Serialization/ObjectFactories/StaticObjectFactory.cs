@@ -1,4 +1,4 @@
-﻿// This file is part of YamlDotNet - A .NET library for YAML.
+// This file is part of YamlDotNet - A .NET library for YAML.
 // Copyright (c) Antoine Aubry and contributors
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy of
@@ -35,6 +35,21 @@ namespace YamlDotNet.Serialization.ObjectFactories
         /// <param name="type">Type of object to create</param>
         /// <returns></returns>
         public abstract object Create(Type type);
+
+        /// <summary>
+        /// Create an object of the specified type using constructor arguments
+        /// </summary>
+        /// <param name="type">Type of object to create</param>
+        /// <param name="args">Constructor arguments</param>
+        /// <returns></returns>
+        public virtual object Create(Type type, object?[]? args)
+        {
+            if (args == null || args.Length == 0)
+            {
+                return Create(type);
+            }
+            return Activator.CreateInstance(type, args)!;
+        }
 
         /// <summary>
         /// Creates an array of the specified type with the size specified
