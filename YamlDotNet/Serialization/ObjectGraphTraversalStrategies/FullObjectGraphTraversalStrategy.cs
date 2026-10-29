@@ -41,6 +41,7 @@ namespace YamlDotNet.Serialization.ObjectGraphTraversalStrategies
         private readonly ITypeResolver typeResolver;
         private readonly INamingConvention namingConvention;
         private readonly IObjectFactory objectFactory;
+        private readonly bool dynamicTypeForGenericCollections;
 
         // The key node emitted for a property is fully determined by the property's (immutable) name,
         // so cache it per descriptor instead of allocating a fresh ObjectDescriptor for every property
@@ -48,7 +49,7 @@ namespace YamlDotNet.Serialization.ObjectGraphTraversalStrategies
         private readonly ConcurrentDictionary<IPropertyDescriptor, ObjectDescriptor> keyNodeDescriptors = new ConcurrentDictionary<IPropertyDescriptor, ObjectDescriptor>();
 
         public FullObjectGraphTraversalStrategy(ITypeInspector typeDescriptor, ITypeResolver typeResolver, int maxRecursion,
-            INamingConvention namingConvention, IObjectFactory objectFactory)
+            INamingConvention namingConvention, IObjectFactory objectFactory, bool dynamicTypeForGenericCollections = false)
         {
             if (maxRecursion <= 0)
             {
@@ -61,6 +62,7 @@ namespace YamlDotNet.Serialization.ObjectGraphTraversalStrategies
             this.maxRecursion = maxRecursion;
             this.namingConvention = namingConvention ?? throw new ArgumentNullException(nameof(namingConvention));
             this.objectFactory = objectFactory ?? throw new ArgumentNullException(nameof(objectFactory));
+            this.dynamicTypeForGenericCollections = dynamicTypeForGenericCollections;
         }
 
         void IObjectGraphTraversalStrategy.Traverse<TContext>(IObjectDescriptor graph, IObjectGraphVisitor<TContext> visitor, TContext context, ObjectSerializer serializer)
@@ -253,7 +255,10 @@ namespace YamlDotNet.Serialization.ObjectGraphTraversalStrategies
 
             foreach (var item in (IEnumerable)value.NonNullValue())
             {
-                Traverse(propertyDescriptor, index, GetObjectDescriptor(item, itemType), visitor, context, path, serializer);
+                var itemDescriptor = (!dynamicTypeForGenericCollections && itemType != typeof(object))
+                    ? new ObjectDescriptor(item, itemType, itemType)
+                    : GetObjectDescriptor(item, itemType);
+                Traverse(propertyDescriptor, index, itemDescriptor, visitor, context, path, serializer);
                 ++index;
             }
 

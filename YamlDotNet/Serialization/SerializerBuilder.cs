@@ -63,6 +63,7 @@ namespace YamlDotNet.Serialization
         private ScalarStyle defaultScalarStyle = ScalarStyle.Any;
         private bool quoteNecessaryStrings;
         private bool quoteYaml1_1Strings;
+        private bool dynamicTypeForGenericCollections;
 
         public SerializerBuilder()
             : base(new DynamicTypeResolver())
@@ -115,10 +116,20 @@ namespace YamlDotNet.Serialization
             objectFactory = new DefaultObjectFactory();
 
             objectGraphTraversalStrategyFactory = (typeInspector, typeResolver, typeConverters, maximumRecursion) =>
-                new FullObjectGraphTraversalStrategy(typeInspector, typeResolver, maximumRecursion, namingConvention, objectFactory);
+                new FullObjectGraphTraversalStrategy(typeInspector, typeResolver, maximumRecursion, namingConvention, objectFactory, dynamicTypeForGenericCollections);
         }
 
         protected override SerializerBuilder Self { get { return this; } }
+
+        /// <summary>
+        /// Enables or disables dynamic type resolution for elements in generic collections and sequences during serialization.
+        /// When enabled, elements in generic collections will be serialized based on their actual runtime type rather than the declared item type.
+        /// </summary>
+        public SerializerBuilder WithDynamicTypeForGenericCollections(bool enable = true)
+        {
+            this.dynamicTypeForGenericCollections = enable;
+            return this;
+        }
 
         /// <summary>
         /// Put double quotes around strings that need it, for example Null, True, False, a number. This should be called before any other "With" methods if you want this feature enabled.
