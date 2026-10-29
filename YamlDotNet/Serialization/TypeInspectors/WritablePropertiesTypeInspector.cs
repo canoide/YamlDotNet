@@ -1,4 +1,4 @@
-﻿// This file is part of YamlDotNet - A .NET library for YAML.
+// This file is part of YamlDotNet - A .NET library for YAML.
 // Copyright (c) Antoine Aubry and contributors
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy of
@@ -35,16 +35,23 @@ namespace YamlDotNet.Serialization.TypeInspectors
     {
         private readonly ITypeResolver typeResolver;
         private readonly bool includeNonPublicProperties;
+        private readonly bool enableTypeDiscriminator;
 
         public WritablePropertiesTypeInspector(ITypeResolver typeResolver)
-            : this(typeResolver, false)
+            : this(typeResolver, false, false)
         {
         }
 
         public WritablePropertiesTypeInspector(ITypeResolver typeResolver, bool includeNonPublicProperties)
+            : this(typeResolver, includeNonPublicProperties, false)
+        {
+        }
+
+        public WritablePropertiesTypeInspector(ITypeResolver typeResolver, bool includeNonPublicProperties, bool enableTypeDiscriminator)
         {
             this.typeResolver = typeResolver ?? throw new ArgumentNullException(nameof(typeResolver));
             this.includeNonPublicProperties = includeNonPublicProperties;
+            this.enableTypeDiscriminator = enableTypeDiscriminator;
         }
 
         private static bool IsValidProperty(PropertyInfo property)
@@ -53,13 +60,33 @@ namespace YamlDotNet.Serialization.TypeInspectors
                 && property.GetSetMethod(true)!.GetParameters().Length == 1;
         }
 
+        private static bool IsObjectMappingType(Type type)
+        {
+            if (type == typeof(object) || type.IsValueType || type == typeof(string))
+            {
+                return false;
+            }
+            if (typeof(System.Collections.IEnumerable).IsAssignableFrom(type))
+            {
+                return false;
+            }
+            return true;
+        }
+
         public override IEnumerable<IPropertyDescriptor> GetProperties(Type type, object? container)
         {
-            return type
+            var props = type
                 .GetProperties(includeNonPublicProperties)
                 .Where(IsValidProperty)
-                .Select(p => (IPropertyDescriptor)new ReflectionPropertyDescriptor(p, typeResolver))
-                .ToArray();
+                .Select(p => (IPropertyDescriptor)new ReflectionPropertyDescriptor(p, typeResolver));
+
+            var actualType = container != null ? container.GetType() : type;
+            if (enableTypeDiscriminator && IsObjectMappingType(actualType))
+            {
+                return new IPropertyDescriptor[] { new TypeDiscriminatorPropertyDescriptor(actualType) }.Concat(props).ToArray();
+            }
+
+            return props.ToArray();
         }
 
         protected class ReflectionPropertyDescriptor : IPropertyDescriptor

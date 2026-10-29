@@ -1,4 +1,4 @@
-﻿// This file is part of YamlDotNet - A .NET library for YAML.
+// This file is part of YamlDotNet - A .NET library for YAML.
 // Copyright (c) Antoine Aubry and contributors
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy of
@@ -63,6 +63,7 @@ namespace YamlDotNet.Serialization
         private ScalarStyle defaultScalarStyle = ScalarStyle.Any;
         private bool quoteNecessaryStrings;
         private bool quoteYaml1_1Strings;
+        private bool enableTypeDiscriminator;
 
         public SerializerBuilder()
             : base(new DynamicTypeResolver())
@@ -119,6 +120,15 @@ namespace YamlDotNet.Serialization
         }
 
         protected override SerializerBuilder Self { get { return this; } }
+
+        /// <summary>
+        /// Enables property-based type discriminators using $type for polymorphic types.
+        /// </summary>
+        public SerializerBuilder WithTypeDiscriminator(bool enable = true)
+        {
+            enableTypeDiscriminator = enable;
+            return this;
+        }
 
         /// <summary>
         /// Put double quotes around strings that need it, for example Null, True, False, a number. This should be called before any other "With" methods if you want this feature enabled.
@@ -722,7 +732,7 @@ namespace YamlDotNet.Serialization
         /// <returns></returns>
         public ITypeInspector BuildTypeInspector()
         {
-            ITypeInspector innerInspector = new ReadablePropertiesTypeInspector(typeResolver, includeNonPublicProperties);
+            ITypeInspector innerInspector = new ReadablePropertiesTypeInspector(typeResolver, includeNonPublicProperties, enableTypeDiscriminator);
 
             if (!ignoreFields)
             {
@@ -730,6 +740,11 @@ namespace YamlDotNet.Serialization
                     new ReadableFieldsTypeInspector(typeResolver),
                     innerInspector
                 );
+            }
+
+            if (enableTypeDiscriminator)
+            {
+                innerInspector = new TypeDiscriminatorTypeInspector(innerInspector);
             }
 
             return typeInspectorFactories.BuildComponentChain(innerInspector);

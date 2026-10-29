@@ -1,4 +1,4 @@
-﻿// This file is part of YamlDotNet - A .NET library for YAML.
+// This file is part of YamlDotNet - A .NET library for YAML.
 // Copyright (c) Antoine Aubry and contributors
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy of
@@ -59,6 +59,7 @@ namespace YamlDotNet.Serialization
         private bool quoteNecessaryStrings;
         private bool quoteYaml1_1Strings;
         private ScalarStyle defaultScalarStyle;
+        private bool enableTypeDiscriminator;
 
         public StaticSerializerBuilder(StaticContext context)
             : base(new DynamicTypeResolver())
@@ -115,6 +116,15 @@ namespace YamlDotNet.Serialization
         }
 
         protected override StaticSerializerBuilder Self { get { return this; } }
+
+        /// <summary>
+        /// Enables property-based type discriminators using $type for polymorphic types.
+        /// </summary>
+        public StaticSerializerBuilder WithTypeDiscriminator(bool enable = true)
+        {
+            enableTypeDiscriminator = enable;
+            return this;
+        }
 
         /// <summary>
         /// Put double quotes around strings that need it, for example Null, True, False, a number. This should be called before any other "With" methods if you want this feature enabled.
@@ -724,6 +734,10 @@ namespace YamlDotNet.Serialization
         public ITypeInspector BuildTypeInspector()
         {
             var typeInspector = context.GetTypeInspector();
+            if (enableTypeDiscriminator)
+            {
+                typeInspector = new TypeDiscriminatorTypeInspector(typeInspector);
+            }
 
             return typeInspectorFactories.BuildComponentChain(typeInspector);
         }
